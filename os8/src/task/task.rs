@@ -6,6 +6,7 @@ use crate::trap::TrapContext;
 use crate::{mm::PhysPageNum, sync::UPSafeCell};
 use alloc::sync::{Arc, Weak};
 use core::cell::RefMut;
+use alloc::vec::Vec;
 
 /// Task control block structure
 ///
@@ -34,6 +35,11 @@ pub struct TaskControlBlockInner {
     pub exit_code: Option<i32>,
     /// Tid and ustack will be deallocated when this goes None
     pub res: Option<TaskUserRes>,
+    // 死锁检测状态
+    pub mutex_alloc:Vec<usize>,
+    pub mutex_need:Vec<usize>,
+    pub sem_alloc:Vec<usize>,
+    pub sem_need:Vec<usize>
 }
 
 /// Simple access to its internal fields
@@ -73,6 +79,10 @@ impl TaskControlBlock {
                     task_cx: TaskContext::goto_trap_return(kstack_top),
                     task_status: TaskStatus::Ready,
                     exit_code: None,
+                    mutex_need: Vec::new(),
+                    mutex_alloc: Vec::new(),
+                    sem_alloc: Vec::new(),
+                    sem_need: Vec::new(),
                 })
             },
         }
@@ -81,11 +91,6 @@ impl TaskControlBlock {
     /// Get the mutex to get the RefMut TaskControlBlockInner
     pub fn inner_exclusive_access(&self) -> RefMut<'_, TaskControlBlockInner> {
         let inner = self.inner.exclusive_access();
-        // if self.process.upgrade().unwrap().pid.0 > 1 {
-        //     if let Some(res) = inner.res.as_ref() {
-        //         println!("t{}i", res.tid);
-        //     }
-        // }
         inner
     }
 
@@ -111,7 +116,6 @@ impl TaskControlBlock {
         context.ra = f as usize;
         context.sp = kstack_top;
 
-        //println!("context ppn :{:#x?}", context_ppn);
 
         Self {
             process,
@@ -124,6 +128,10 @@ impl TaskControlBlock {
                     task_cx: context,
                     task_status: TaskStatus::Ready,
                     exit_code: None,
+                    mutex_need: Vec::new(),
+                    mutex_alloc: Vec::new(),
+                    sem_alloc: Vec::new(),
+                    sem_need: Vec::new(),
                 })
             },
         }
